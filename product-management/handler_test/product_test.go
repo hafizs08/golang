@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/hafizs08/product-management/internal/handler"
-	"github.com/hafizs08/product-management/internal/repository/mock" // Import mock package
+	mockRepo "github.com/hafizs08/product-management/internal/repository/mock" // Renamed mock to mockRepo
 	"github.com/hafizs08/product-management/internal/service"
 
 	"github.com/gofiber/fiber/v2"
@@ -15,14 +15,14 @@ import (
 )
 
 func TestProductHandler_CreateProduct(t *testing.T) {
-	mockRepo := new(mock.MockProductRepository)
-	productService := service.NewProductService(mockRepo)
+	repoMock := new(mockRepo.MockProductRepository) // Updated variable name
+	productService := service.NewProductService(repoMock)
 	productHandler := handler.NewProductHandler(productService)
 
 	app := fiber.New()
 	app.Post("/products", productHandler.CreateProduct)
 
-	mockRepo.On("Create", mock.Anything).Return(nil)
+	repoMock.On("Create", mock.Anything).Return(nil)
 
 	// Simulate a request to create a product
 	req := httptest.NewRequest("POST", "/products", bytes.NewBuffer([]byte(`{"name":"Product 1","description":"Desc 1","price":10,"stock":5}`)))
@@ -34,15 +34,15 @@ func TestProductHandler_CreateProduct(t *testing.T) {
 }
 
 func TestProductHandler_GetAllProducts(t *testing.T) {
-	mockRepo := new(mock.MockProductRepository)
-	productService := service.NewProductService(mockRepo)
+	repoMock := new(mockRepo.MockProductRepository) // Updated variable name
+	productService := service.NewProductService(repoMock)
 	productHandler := handler.NewProductHandler(productService)
 
 	app := fiber.New()
 	app.Get("/products", productHandler.GetAllProducts)
 
 	// Simulate a request to get all products
-	mockRepo.On("GetAllProducts").Return([]domain.Product{{ID: "1", Name: "Product 1", Price: 10, Stock: 5}}, nil)
+	repoMock.On("GetAll").Return([]domain.Product{{ID: "1", Name: "Product 1", Price: 10, Stock: 5}}, nil)
 
 	req := httptest.NewRequest("GET", "/products", nil)
 	resp, _ := app.Test(req)
