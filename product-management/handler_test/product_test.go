@@ -6,9 +6,9 @@ import (
 	"product-management/internal/domain"
 	"testing"
 
-	"github.com/hafizs08/product-management/internal/handler"
-	mockRepo "github.com/hafizs08/product-management/internal/repository/mock" // Renamed mock to mockRepo
-	"github.com/hafizs08/product-management/internal/service"
+	"github.com/hafizs08/golang/product-management/internal/handler"
+	mockRepo "github.com/hafizs08/golang/product-management/internal/repository/mock" // Ensure this path is correct
+	"github.com/hafizs08/golang/product-management/internal/service"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/mock"
