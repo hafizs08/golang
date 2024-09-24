@@ -17,6 +17,15 @@ func NewProductHandler(productService *service.ProductService) *ProductHandler {
 		productService: productService,
 	}
 }
+func (h *ProductHandler) GetMySQLProducts(c *fiber.Ctx) error {
+	products, err := h.productService.GetMySQLProducts()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Unable to fetch products",
+		})
+	}
+	return c.JSON(products)
+}
 
 // CreateProduct creates a new product
 func (h *ProductHandler) CreateProduct(c *fiber.Ctx) error {
