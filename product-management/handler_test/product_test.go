@@ -1,53 +1,172 @@
-package handler_test
+package service_test
 
 import (
-	"bytes"
-	"net/http/httptest"
+	"errors"
 	"product-management/internal/domain"
+	"product-management/internal/service"
 	"testing"
 
-	"github.com/hafizs08/golang/product-management/internal/handler"
-	mockRepo "github.com/hafizs08/golang/product-management/internal/repository/mock" // Ensure this path is correct
-	"github.com/hafizs08/golang/product-management/internal/service"
-
-	"github.com/gofiber/fiber/v2"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
-func TestProductHandler_CreateProduct(t *testing.T) {
-	repoMock := new(mockRepo.MockProductRepository) // Updated variable name
-	productService := service.NewProductService(repoMock)
-	productHandler := handler.NewProductHandler(productService)
-
-	app := fiber.New()
-	app.Post("/products", productHandler.CreateProduct)
-
-	repoMock.On("Create", mock.Anything).Return(nil)
-
-	// Simulate a request to create a product
-	req := httptest.NewRequest("POST", "/products", bytes.NewBuffer([]byte(`{"name":"Product 1","description":"Desc 1","price":10,"stock":5}`)))
-	resp, _ := app.Test(req)
-
-	if resp.StatusCode != 201 {
-		t.Errorf("expected status 201, got %d", resp.StatusCode)
-	}
+// MockRepository is a mock of ProductRepository for testing purposes
+type MockRepository struct {
+	mock.Mock
 }
 
-func TestProductHandler_GetAllProducts(t *testing.T) {
-	repoMock := new(mockRepo.MockProductRepository) // Updated variable name
-	productService := service.NewProductService(repoMock)
-	productHandler := handler.NewProductHandler(productService)
+func (m *MockRepository) Create(product *domain.Product) error {
+	args := m.Called(product)
+	return args.Error(0)
+}
 
-	app := fiber.New()
-	app.Get("/products", productHandler.GetAllProducts)
-
-	// Simulate a request to get all products
-	repoMock.On("GetAll").Return([]domain.Product{{ID: "1", Name: "Product 1", Price: 10, Stock: 5}}, nil)
-
-	req := httptest.NewRequest("GET", "/products", nil)
-	resp, _ := app.Test(req)
-
-	if resp.StatusCode != 200 {
-		t.Errorf("expected status 200, got %d", resp.StatusCode)
+func (m *MockRepository) GetAllProducts() ([]domain.Product, error) {
+	args := m.Called()
+	if products, ok := args.Get(0).([]domain.Product); ok {
+		return products, args.Error(1)
 	}
+	return nil, args.Error(1)
+}
+
+func (m *MockRepository) GetProductById(id string) (*domain.Product, error) {
+	args := m.Called(id)
+	if product, ok := args.Get(0).(*domain.Product); ok {
+		return product, args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *MockRepository) UpdateProduct(id string, product *domain.Product) error {
+	args := m.Called(id, product)
+	return args.Error(0)
+}
+
+func (m *MockRepository) DeleteProduct(id string) error {
+	args := m.Called(id)
+	return args.Error(0)
+}
+
+// Test CreateProduct function
+func TestCreateProduct(t *testing.T) {
+	mockMySQLRepo := new(MockRepository)
+	mockMongoRepo := new(MockRepository)
+	productService := service.NewProductService(mockMySQLRepo, mockMongoRepo)
+
+	product := &domain.Product{
+		Name:        "Test Product",
+		Description: "Test Description",
+		Price:       100,
+		Stock:       10,
+	}
+
+	t.Run("successfully creates product", func(t *testing.T) {
+		mockMySQLRepo.On("Create", product).Return(nil)
+		mockMongoRepo.On("Create", product).Return(nil)
+
+		err := productService.CreateProduct(product)
+		assert.NoError(t, err)
+		mockMySQLRepo.AssertExpectations(t)
+		mockMongoRepo.AssertExpectations(t)
+	})
+
+	t.Run("fails to create product in MySQL", func(t *testing.T) {
+		mockMySQLRepo.On("Create", product).Return(errors.New("MySQL error"))
+
+		err := productService.CreateProduct(product)
+		assert.Error(t, err)
+		mockMySQLRepo.AssertExpectations(t)
+	})
+}
+
+// Test GetAllProducts function
+func TestGetAllProducts(t *testing.T) {
+	mockMySQLRepo := new(MockRepository)
+	mockMongoRepo := new(MockRepository)
+	productService := service.NewProductService(mockMySQLRepo, mockMongoRepo)
+
+	t.Run("successfully gets all products", func(t *testing.T) {
+		mysqlProducts := []domain.Product{
+			{Name: "MySQL Product", Price: 100},
+		}
+		mongoProducts := []domain.Product{
+			{Name: "Mongo Product", Price: 200},
+		}
+
+		mockMySQLRepo.On("GetAllProducts").Return(mysqlProducts, nil)
+		mockMongoRepo.On("GetAllProducts").Return(mongoProducts, nil)
+
+		products, err := productService.GetAllProducts()
+		assert.NoError(t, err)
+		assert.Len(t, products, 2)
+		mockMySQLRepo.AssertExpectations(t)
+		mockMongoRepo.AssertExpectations(t)
+	})
+
+	t.Run("fails to get products from MySQL", func(t *testing.T) {
+		mockMySQLRepo.On("GetAllProducts").Return(nil, errors.New("MySQL error"))
+
+		_, err := productService.GetAllProducts()
+		assert.Error(t, err)
+		mockMySQLRepo.AssertExpectations(t)
+	})
+}
+
+// Test GetProductById function
+func TestGetProductById(t *testing.T) {
+	mockMySQLRepo := new(MockRepository)
+	mockMongoRepo := new(MockRepository)
+	productService := service.NewProductService(mockMySQLRepo, mockMongoRepo)
+
+	productID := "12345"
+	product := &domain.Product{
+		ID:    productID,
+		Name:  "Test Product",
+		Price: 100,
+	}
+
+	t.Run("successfully gets product from MySQL", func(t *testing.T) {
+		mockMySQLRepo.On("GetProductById", productID).Return(product, nil)
+
+		result, err := productService.GetProductById(productID)
+		assert.NoError(t, err)
+		assert.Equal(t, product, result)
+		mockMySQLRepo.AssertExpectations(t)
+	})
+
+	t.Run("gets product from MongoDB when not found in MySQL", func(t *testing.T) {
+		mockMySQLRepo.On("GetProductById", productID).Return(nil, errors.New("not found"))
+		mockMongoRepo.On("GetProductById", productID).Return(product, nil)
+
+		result, err := productService.GetProductById(productID)
+		assert.NoError(t, err)
+		assert.Equal(t, product, result)
+		mockMongoRepo.AssertExpectations(t)
+	})
+}
+
+// Test DeleteProduct function
+func TestDeleteProduct(t *testing.T) {
+	mockMySQLRepo := new(MockRepository)
+	mockMongoRepo := new(MockRepository)
+	productService := service.NewProductService(mockMySQLRepo, mockMongoRepo)
+
+	productID := "12345"
+
+	t.Run("successfully deletes product", func(t *testing.T) {
+		mockMySQLRepo.On("DeleteProduct", productID).Return(nil)
+		mockMongoRepo.On("DeleteProduct", productID).Return(nil)
+
+		err := productService.DeleteProduct(productID)
+		assert.NoError(t, err)
+		mockMySQLRepo.AssertExpectations(t)
+		mockMongoRepo.AssertExpectations(t)
+	})
+
+	t.Run("fails to delete product in MySQL", func(t *testing.T) {
+		mockMySQLRepo.On("DeleteProduct", productID).Return(errors.New("MySQL error"))
+
+		err := productService.DeleteProduct(productID)
+		assert.Error(t, err)
+		mockMySQLRepo.AssertExpectations(t)
+	})
 }
