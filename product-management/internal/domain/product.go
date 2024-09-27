@@ -5,7 +5,7 @@ import "go.mongodb.org/mongo-driver/bson/primitive"
 
 // Product represents the product entity with validation tags
 type Product struct {
-	ID          string             `json:"id"`
+	ID          string             `json:"id,omitempty"` // Tambahkan omitempty untuk mengabaikan jika kosong
 	MongoID     primitive.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`
 	Name        string             `json:"name" validate:"required,max=100"`
 	Description string             `json:"description" validate:"required"`
@@ -14,7 +14,6 @@ type Product struct {
 }
 
 // ProductRepository defines the methods for interacting with products in the repository
-
 type ProductRepository interface {
 	Create(product *Product) error
 	GetAllProducts() ([]Product, error)

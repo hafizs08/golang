@@ -44,7 +44,8 @@ func main() {
 	app.Get("/products/:id", productHandler.GetProductByID)
 	app.Put("/products/:id", productHandler.UpdateProduct)
 	app.Delete("/products/:id", productHandler.DeleteProduct)
-	app.Get("/Get", productHandler.GetMySQLProducts)
+	app.Get("/mysql-products", productHandler.GetMySQLProducts)
+	app.Get("/mongodb-products", productHandler.GetMongoDBProducts)
 
 	log.Fatal(app.Listen(":3000"))
 }

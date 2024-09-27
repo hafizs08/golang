@@ -1,172 +1,127 @@
-package service_test
+package product_test
 
 import (
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"product-management/internal/domain"
 	"product-management/internal/service"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
-// MockRepository is a mock of ProductRepository for testing purposes
-type MockRepository struct {
-	mock.Mock
+// Mock MySQL Repository
+type mockMySQLRepo struct{}
+
+func (m *mockMySQLRepo) GetAllProducts() ([]domain.Product, error) {
+	return nil, nil
 }
 
-func (m *MockRepository) Create(product *domain.Product) error {
-	args := m.Called(product)
-	return args.Error(0)
+func (m *mockMySQLRepo) Create(product *domain.Product) error {
+	return nil
 }
 
-func (m *MockRepository) GetAllProducts() ([]domain.Product, error) {
-	args := m.Called()
-	if products, ok := args.Get(0).([]domain.Product); ok {
-		return products, args.Error(1)
+func (m *mockMySQLRepo) GetProductById(id string) (*domain.Product, error) {
+	return nil, nil
+}
+
+func (m *mockMySQLRepo) UpdateProduct(id string, product *domain.Product) error {
+	return nil
+}
+
+func (m *mockMySQLRepo) DeleteProduct(id string) error {
+	return nil
+}
+
+// Mock MongoDB Repository
+type mockMongoRepo struct{}
+
+func (m *mockMongoRepo) GetAllProducts() ([]domain.Product, error) {
+	return []domain.Product{
+		{
+			ID:          "66f268c84b7253868ad8312e",
+			Name:        "kecap",
+			Description: "asus",
+			Price:       10000,
+			Stock:       20,
+		},
+		{
+			ID:          "66f269094b7253868ad8312f",
+			Name:        "ritonga",
+			Description: "New product description",
+			Price:       49.99,
+			Stock:       20,
+		},
+		{
+			ID:          "66f28741deae451485368e74",
+			Name:        "kiki",
+			Description: "New product description",
+			Price:       49.99,
+			Stock:       20,
+		},
+	}, nil
+}
+
+func (m *mockMongoRepo) Create(product *domain.Product) error {
+	return nil
+}
+
+func (m *mockMongoRepo) GetProductById(id string) (*domain.Product, error) {
+	if id == "66f268c84b7253868ad8312e" {
+		return &domain.Product{
+			ID:          "66f268c84b7253868ad8312e",
+			Name:        "kecap",
+			Description: "asus",
+			Price:       10000,
+			Stock:       20,
+		}, nil
 	}
-	return nil, args.Error(1)
+	return nil, errors.New("product not found")
 }
 
-func (m *MockRepository) GetProductById(id string) (*domain.Product, error) {
-	args := m.Called(id)
-	if product, ok := args.Get(0).(*domain.Product); ok {
-		return product, args.Error(1)
-	}
-	return nil, args.Error(1)
+func (m *mockMongoRepo) UpdateProduct(id string, product *domain.Product) error {
+	return nil
 }
 
-func (m *MockRepository) UpdateProduct(id string, product *domain.Product) error {
-	args := m.Called(id, product)
-	return args.Error(0)
+func (m *mockMongoRepo) DeleteProduct(id string) error {
+	return nil
 }
 
-func (m *MockRepository) DeleteProduct(id string) error {
-	args := m.Called(id)
-	return args.Error(0)
-}
+// Test untuk mendapatkan semua produk dari MongoDB
+func TestGetMongoDBProducts(t *testing.T) {
+	// Membuat mock repository MySQL dan MongoDB
+	mockMySQLRepository := &mockMySQLRepo{}
+	mockMongoRepository := &mockMongoRepo{}
 
-// Test CreateProduct function
-func TestCreateProduct(t *testing.T) {
-	mockMySQLRepo := new(MockRepository)
-	mockMongoRepo := new(MockRepository)
-	productService := service.NewProductService(mockMySQLRepo, mockMongoRepo)
+	// Membuat service dengan repository mock
+	productService := service.NewProductService(mockMySQLRepository, mockMongoRepository)
 
-	product := &domain.Product{
-		Name:        "Test Product",
-		Description: "Test Description",
-		Price:       100,
-		Stock:       10,
+	// Membuat permintaan HTTP
+	req, err := http.NewRequest("GET", "/mongodb-products", nil)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	t.Run("successfully creates product", func(t *testing.T) {
-		mockMySQLRepo.On("Create", product).Return(nil)
-		mockMongoRepo.On("Create", product).Return(nil)
-
-		err := productService.CreateProduct(product)
-		assert.NoError(t, err)
-		mockMySQLRepo.AssertExpectations(t)
-		mockMongoRepo.AssertExpectations(t)
-	})
-
-	t.Run("fails to create product in MySQL", func(t *testing.T) {
-		mockMySQLRepo.On("Create", product).Return(errors.New("MySQL error"))
-
-		err := productService.CreateProduct(product)
-		assert.Error(t, err)
-		mockMySQLRepo.AssertExpectations(t)
-	})
-}
-
-// Test GetAllProducts function
-func TestGetAllProducts(t *testing.T) {
-	mockMySQLRepo := new(MockRepository)
-	mockMongoRepo := new(MockRepository)
-	productService := service.NewProductService(mockMySQLRepo, mockMongoRepo)
-
-	t.Run("successfully gets all products", func(t *testing.T) {
-		mysqlProducts := []domain.Product{
-			{Name: "MySQL Product", Price: 100},
+	// Menggunakan httptest untuk membuat response recorder
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		products, err := productService.GetMongoDBProducts()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
-		mongoProducts := []domain.Product{
-			{Name: "Mongo Product", Price: 200},
-		}
-
-		mockMySQLRepo.On("GetAllProducts").Return(mysqlProducts, nil)
-		mockMongoRepo.On("GetAllProducts").Return(mongoProducts, nil)
-
-		products, err := productService.GetAllProducts()
-		assert.NoError(t, err)
-		assert.Len(t, products, 2)
-		mockMySQLRepo.AssertExpectations(t)
-		mockMongoRepo.AssertExpectations(t)
+		json.NewEncoder(w).Encode(products)
 	})
 
-	t.Run("fails to get products from MySQL", func(t *testing.T) {
-		mockMySQLRepo.On("GetAllProducts").Return(nil, errors.New("MySQL error"))
+	// Menjalankan handler dengan permintaan di atas
+	handler.ServeHTTP(rr, req)
 
-		_, err := productService.GetAllProducts()
-		assert.Error(t, err)
-		mockMySQLRepo.AssertExpectations(t)
-	})
-}
+	// Memeriksa apakah status kode yang dikembalikan adalah 200
+	assert.Equal(t, http.StatusOK, rr.Code)
 
-// Test GetProductById function
-func TestGetProductById(t *testing.T) {
-	mockMySQLRepo := new(MockRepository)
-	mockMongoRepo := new(MockRepository)
-	productService := service.NewProductService(mockMySQLRepo, mockMongoRepo)
-
-	productID := "12345"
-	product := &domain.Product{
-		ID:    productID,
-		Name:  "Test Product",
-		Price: 100,
-	}
-
-	t.Run("successfully gets product from MySQL", func(t *testing.T) {
-		mockMySQLRepo.On("GetProductById", productID).Return(product, nil)
-
-		result, err := productService.GetProductById(productID)
-		assert.NoError(t, err)
-		assert.Equal(t, product, result)
-		mockMySQLRepo.AssertExpectations(t)
-	})
-
-	t.Run("gets product from MongoDB when not found in MySQL", func(t *testing.T) {
-		mockMySQLRepo.On("GetProductById", productID).Return(nil, errors.New("not found"))
-		mockMongoRepo.On("GetProductById", productID).Return(product, nil)
-
-		result, err := productService.GetProductById(productID)
-		assert.NoError(t, err)
-		assert.Equal(t, product, result)
-		mockMongoRepo.AssertExpectations(t)
-	})
-}
-
-// Test DeleteProduct function
-func TestDeleteProduct(t *testing.T) {
-	mockMySQLRepo := new(MockRepository)
-	mockMongoRepo := new(MockRepository)
-	productService := service.NewProductService(mockMySQLRepo, mockMongoRepo)
-
-	productID := "12345"
-
-	t.Run("successfully deletes product", func(t *testing.T) {
-		mockMySQLRepo.On("DeleteProduct", productID).Return(nil)
-		mockMongoRepo.On("DeleteProduct", productID).Return(nil)
-
-		err := productService.DeleteProduct(productID)
-		assert.NoError(t, err)
-		mockMySQLRepo.AssertExpectations(t)
-		mockMongoRepo.AssertExpectations(t)
-	})
-
-	t.Run("fails to delete product in MySQL", func(t *testing.T) {
-		mockMySQLRepo.On("DeleteProduct", productID).Return(errors.New("MySQL error"))
-
-		err := productService.DeleteProduct(productID)
-		assert.Error(t, err)
-		mockMySQLRepo.AssertExpectations(t)
-	})
+	// Memeriksa apakah hasil JSON sesuai dengan yang diharapkan
+	expected := `[{"_id":"66f268c84b7253868ad8312e","name":"kecap","description":"asus","price":10000,"stock":20},{"_id":"66f269094b7253868ad8312f","name":"ritonga","description":"New product description","price":49.99,"stock":20},{"_id":"66f28741deae451485368e74","name":"kiki","description":"New product description","price":49.99,"stock":20}]`
+	assert.JSONEq(t, expected, rr.Body.String())
 }

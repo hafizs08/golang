@@ -2,6 +2,7 @@ package handler
 
 import (
 	"log"
+	"net/http" // Tambahkan ini untuk memperbaiki error 'undefined: http'
 	"product-management/internal/domain"
 	"product-management/internal/service"
 
@@ -17,6 +18,7 @@ func NewProductHandler(productService *service.ProductService) *ProductHandler {
 		productService: productService,
 	}
 }
+
 func (h *ProductHandler) GetMySQLProducts(c *fiber.Ctx) error {
 	products, err := h.productService.GetMySQLProducts()
 	if err != nil {
@@ -76,6 +78,13 @@ func (h *ProductHandler) GetProductByID(c *fiber.Ctx) error {
 		})
 	}
 
+	// Tambahkan kondisi jika produk tidak ditemukan
+	if product == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Product with ID " + id + " not found",
+		})
+	}
+
 	return c.Status(fiber.StatusOK).JSON(product)
 }
 
@@ -91,7 +100,21 @@ func (h *ProductHandler) UpdateProduct(c *fiber.Ctx) error {
 		})
 	}
 
-	err := h.productService.UpdateProduct(id, &product)
+	// Cek apakah produk dengan ID yang diberikan ada
+	existingProduct, err := h.productService.GetProductById(id)
+	if err != nil {
+		log.Printf("Error retrieving product: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to retrieve product",
+		})
+	}
+	if existingProduct == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Product with ID " + id + " not found",
+		})
+	}
+
+	err = h.productService.UpdateProduct(id, &product)
 	if err != nil {
 		log.Printf("Error updating product: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -109,7 +132,21 @@ func (h *ProductHandler) UpdateProduct(c *fiber.Ctx) error {
 func (h *ProductHandler) DeleteProduct(c *fiber.Ctx) error {
 	id := c.Params("id")
 
-	err := h.productService.DeleteProduct(id)
+	// Cek apakah produk dengan ID yang diberikan ada
+	existingProduct, err := h.productService.GetProductById(id)
+	if err != nil {
+		log.Printf("Error retrieving product: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to retrieve product",
+		})
+	}
+	if existingProduct == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Product with ID " + id + " not found",
+		})
+	}
+
+	err = h.productService.DeleteProduct(id)
 	if err != nil {
 		log.Printf("Error deleting product: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -120,4 +157,14 @@ func (h *ProductHandler) DeleteProduct(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"message": "Product successfully deleted",
 	})
+}
+
+func (h *ProductHandler) GetMongoDBProducts(c *fiber.Ctx) error {
+	products, err := h.productService.GetMongoDBProducts()
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+	return c.Status(http.StatusOK).JSON(products)
 }

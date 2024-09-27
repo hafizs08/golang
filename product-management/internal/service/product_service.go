@@ -1,3 +1,4 @@
+// internal/service/product_service.go
 package service
 
 import (
@@ -92,4 +93,8 @@ func (s *ProductService) DeleteProduct(id string) error {
 }
 func (s *ProductService) GetMySQLProducts() ([]domain.Product, error) {
 	return s.mysqlRepo.GetAllProducts()
+}
+
+func (s *ProductService) GetMongoDBProducts() ([]domain.Product, error) {
+	return s.mongoRepo.GetAllProducts()
 }
